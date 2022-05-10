@@ -1,0 +1,40 @@
+[
+{
+	"name": "Moose Test",
+	"description": "",
+	"previews": ["moose_test_angelo234.png"],
+	"type": "race",
+	"date": 1649573494,
+	"authors": "angelo234",
+	"introType": "selectableVehicle",
+	"difficulty": "60",
+	"levelObjects": {
+		"tod": 
+		{
+			"time": 0.1,
+			"dayLength": 120,
+			"play": false
+		}	
+	},
+	"vehicles": 
+	{
+		"thePlayer":
+		{
+			"playerUsable": true
+			"driver":
+			{
+				"player": true,
+				"startFocus": true,
+				"required": true,
+				"command": "",
+			}
+		},
+		"*": 
+		{
+			"playerUsable": false
+		}
+	},
+	
+	"prefabs": ["moose_test_angelo234"],
+}
+]
