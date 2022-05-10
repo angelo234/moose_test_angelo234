@@ -46,6 +46,20 @@ local function failRun(msg)
   end
 end
 
+local function removeOtherObjects()
+  local handling_moose_test = scenetree.zone_handling:findObject("handling_moose_test")
+  
+  for k, v in pairs(handling_moose_test:getObjects()) do
+    local obj = handling_moose_test:findObjectById(v)
+    
+    if obj.shapeName == "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_dome_4x4.dae" then
+      obj:setField('position', '', '0 -999 0')
+    end
+  end
+  
+  be:reloadCollision()
+end
+
 local function setupCones()
   local veh = be:getPlayerVehicle(0)
   
@@ -148,6 +162,7 @@ local function setupCones()
 end
 
 local function onRaceStart()
+  removeOtherObjects()
   setupCones()
   resetSpeeds()
   
