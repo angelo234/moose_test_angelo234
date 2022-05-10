@@ -2,7 +2,7 @@ local M = {}
 
 local helper = require('scenario/scenariohelper')
 
-local spawn_pos = vec3(344, 220, 100.25)
+local spawn_pos = vec3(344, 219.67, 100.25)
 
 local zones_speeds_history = {}
 
