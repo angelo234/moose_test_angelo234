@@ -68,7 +68,7 @@ local function setupCones()
   -- Section 1
   -- width (m) = 1.1 * vehicle_width + 0.25
   -- left = pos y axis
-  local half_width = 1.1 * veh:getSpawnWorldOOBB():getHalfExtents().x + 0.25
+  local half_width_1 = 1.1 * veh:getSpawnWorldOOBB():getHalfExtents().x + 0.125
   
   local section1_markers = {"marker1", "marker2", "marker3"}
   local section1_cones = {"cone1l", "cone1r", "cone2l", "cone2r", "cone3l", "cone3r"}
@@ -82,8 +82,58 @@ local function setupCones()
     local cone_l = scenetree.findObject(section1_cones[i])
     local cone_r = scenetree.findObject(section1_cones[i + 1])
     
-    cone_l:setPosition(vec3(marker_pos.x, marker_pos.y + half_width, marker_pos.z))
-    cone_r:setPosition(vec3(marker_pos.x, marker_pos.y - half_width, marker_pos.z))
+    cone_l:setPosition(marker_pos + vec3(0, half_width_1, 0))
+    cone_r:setPosition(marker_pos - vec3(0, half_width_1, 0))
+    
+    i = i + 2
+  end
+  
+  -- Section 2
+  -- width (m) = vehicle_width + 1.0
+  local half_width_2 = veh:getSpawnWorldOOBB():getHalfExtents().x + 0.5
+  
+  local section2_markers = {"marker4", "marker5", "marker6"}
+  local section2_cones = {"cone4l", "cone4r", "cone5l", "cone5r", "cone6l", "cone6r"}
+  
+  local cone3l_pos = scenetree.findObject("cone3l"):getPosition() 
+  local marker_y = cone3l_pos.y + 1 + half_width_2
+
+  i = 1
+  
+  for k, v in pairs(section2_markers) do
+    local marker = scenetree.findObject(v)
+    local marker_pos = marker:getPosition()
+    
+    marker:setPosition(vec3(marker_pos.x, marker_y, marker_pos.z))
+    marker_pos = marker:getPosition()
+    
+    local cone_l = scenetree.findObject(section2_cones[i])
+    local cone_r = scenetree.findObject(section2_cones[i + 1])
+    
+    cone_l:setPosition(marker_pos + vec3(0, half_width_2, 0))
+    cone_r:setPosition(marker_pos - vec3(0, half_width_2, 0))
+    
+    i = i + 2
+  end
+  
+  -- Section 3
+  -- width (m) = 3
+  local half_width_3 = 1.5
+  
+  local section3_markers = {"marker7", "marker8", "marker9"}
+  local section3_cones = {"cone7l", "cone7r", "cone8l", "cone8r", "cone9l", "cone9r"}
+  
+  i = 1
+  
+  for k, v in pairs(section3_markers) do
+    local marker = scenetree.findObject(v)
+    local marker_pos = marker:getPosition()
+    
+    local cone_l = scenetree.findObject(section3_cones[i])
+    local cone_r = scenetree.findObject(section3_cones[i + 1])
+    
+    cone_l:setPosition(marker_pos + vec3(0, half_width_3, 0))
+    cone_r:setPosition(marker_pos - vec3(0, half_width_3, 0))
     
     i = i + 2
   end
