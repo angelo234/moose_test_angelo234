@@ -46,14 +46,59 @@ local function failRun(msg)
   end
 end
 
-local function onRaceStart()
+local function setupCones()
+  local veh = be:getPlayerVehicle(0)
+  
+  local markers = getObjectsByClass("BeamNGPointOfInterest")
+  
+  -- Sort unsorted markers
+  local sorted_markers = {}
+  
+  for k,v in pairs(markers) do
+    if v.name:find("marker") then
+      local str_idx = v.name:gsub('%marker', '')
+      local idx = tonumber(str_idx)
+      
+      if idx then
+        sorted_markers[idx] = v 
+      end
+    end
+  end
+  
+  -- Section 1
+  -- width (m) = 1.1 * vehicle_width + 0.25
+  -- left = pos y axis
+  local half_width = 1.1 * veh:getSpawnWorldOOBB():getHalfExtents().x + 0.25
+  
+  local section1_markers = {"marker1", "marker2", "marker3"}
+  local section1_cones = {"cone1l", "cone1r", "cone2l", "cone2r", "cone3l", "cone3r"}
+  
+  local i = 1
+  
+  for k, v in pairs(section1_markers) do
+    local marker = scenetree.findObject(v)
+    local marker_pos = marker:getPosition()
+    
+    local cone_l = scenetree.findObject(section1_cones[i])
+    local cone_r = scenetree.findObject(section1_cones[i + 1])
+    
+    cone_l:setPosition(vec3(marker_pos.x, marker_pos.y + half_width, marker_pos.z))
+    cone_r:setPosition(vec3(marker_pos.x, marker_pos.y - half_width, marker_pos.z))
+    
+    i = i + 2
+  end
+  
   -- Store init position of cones for determining if they move later
   for k,v in pairs(map.objects) do
     cones_init_pos[k] = vec3(v.pos)
   end
   
+  -- Track cones for movement
   be:queueAllObjectLua("mapmgr.enableTracking()")
-  
+end
+
+local function onRaceStart()
+  setupCones()
   resetSpeeds()
   
   next_trigger = 1
@@ -65,7 +110,7 @@ local function getUserInputs()
   if not playerVehicle then return end
     
   for k, v in pairs(M.last_user_inputs) do    
-    playerVehicle:queueLuaCommand("obj:queueGameEngineLua('scenario_moose_test_angelo234.last_user_inputs." .. k .. " = ' .. input.state." .. k .. ".val)")
+    playerVehicle:queueLuaCommand("obj:queueGameEngineLua('if not scenario_moose_test_angelo234 then return end scenario_moose_test_angelo234.last_user_inputs." .. k .. " = ' .. input.state." .. k .. ".val)")
   end
 end
 
