@@ -1,8 +1,12 @@
 local M = {}
 
+local im = extensions.ui_imgui
+
 local helper = require('scenario/scenariohelper')
 
 local spawn_pos = vec3(344, 219.67, 100.25)
+
+local runs_json_file_dir = "settings/moose_test_angelo234/runs.json"
 
 local zones_speeds_history = {}
 
@@ -12,6 +16,7 @@ local zones_speeds_history = {}
 local current_zones_speeds = {}
 
 local cones_init_pos = {}
+local cone_set_init_pos_timer = -1
 
 local state = "ready"
 local next_trigger = 1
@@ -26,6 +31,52 @@ M.last_user_inputs = {
 
 local update_ui_timer = 0
 local update_ui_delay = 0.25 -- update UI every 0.25 seconds
+
+local window_open = im.BoolPtr(true)
+
+local runs_data = {}
+
+local function readRunsJSONFile()
+  runs_data = readJsonFile(runs_json_file_dir) or {}
+end
+
+local function addRunToJSONFile(new_run)
+  if tableSize(runs_data) == 0 then
+    table.insert(runs_data, new_run)
+  else
+    local added = false
+  
+    -- Place new entry in correct order by speed
+    for k,v in ipairs(runs_data) do
+      if new_run.speed > v.speed then
+        table.insert(runs_data, k, new_run)
+        
+        added = true
+        break
+      end
+    end
+    
+    if not added then
+      table.insert(runs_data, new_run)
+    end
+  end
+  
+  jsonWriteFile(runs_json_file_dir, runs_data)
+end
+
+local function removeRunFromJSONFile(id)
+  table.remove(runs_data, id)
+  jsonWriteFile(runs_json_file_dir, runs_data)
+end
+
+local function removeAllRunsFromJSONFile()
+  runs_data = {}
+  jsonWriteFile(runs_json_file_dir, runs_data)
+end
+
+local function onExtensionLoaded()
+  readRunsJSONFile()
+end
 
 -- http://lua-users.org/wiki/SimpleRound
 function round(num, numDecimalPlaces)
@@ -152,13 +203,7 @@ local function setupCones()
     i = i + 2
   end
   
-  -- Store init position of cones for determining if they move later
-  for k,v in pairs(map.objects) do
-    cones_init_pos[k] = vec3(v.pos)
-  end
-  
-  -- Track cones for movement
-  be:queueAllObjectLua("mapmgr.enableTracking()")
+  cone_set_init_pos_timer = 0
 end
 
 local function onRaceStart()
@@ -192,7 +237,7 @@ local function renderUIText(dt)
     local speed = 0
     
     if zones_speeds_history[#zones_speeds_history] then 
-      speed = zones_speeds_history[#zones_speeds_history][2]
+      speed = zones_speeds_history[#zones_speeds_history][1]
     end
     
     guihooks.message("Last Exit Speed: " .. string.format("%.1f", round(speed * 3.6, 1)) .. " km/h", 2 * update_ui_delay, "num_deliveries")
@@ -203,9 +248,59 @@ local function renderUIText(dt)
   update_ui_timer = update_ui_timer + dt
 end
 
+local function renderIMGUI()
+  local im_char_size = 6.25
+  local x_button_size = 15
+  
+  if im.Begin('Leaderboards', window_open) then
+    if im.Button("Remove All Runs") then
+      removeAllRunsFromJSONFile()
+    end
+    
+    for k,v in ipairs(runs_data) do
+      local str_speed = string.format("%.1f km/h", round(v.speed * 3.6, 1))
+      
+      local avail = im.GetContentRegionAvail().x - x_button_size
+      
+      local full_text = tostring(k) .. ". " .. str_speed .. ", " .. v.config_name
+      local text_displayed = string.sub(full_text, 1, math.floor(avail / im_char_size))
+      
+      im.Text(text_displayed)
+      im.tooltip(full_text)
+      
+      im.SameLine(avail)
+      if im.Button("X##" .. tostring(k)) then
+        removeRunFromJSONFile(k)
+      end
+    end
+  end
+  im.End()
+end
+
+local function onUpdate(dt)
+  renderIMGUI()
+end
+
 local function onPreRender(dt, dtSim)
+  if cone_set_init_pos_timer >= 1 then
+    -- Store init position of cones for determining if they move later
+    for k,v in pairs(map.objects) do
+      cones_init_pos[k] = vec3(v.pos)
+    end
+    
+    -- Track cones for movement
+    be:queueAllObjectLua("mapmgr.enableTracking()")
+    
+    cone_set_init_pos_timer = -1
+  end
+  
+  if cone_set_init_pos_timer >= 0 then
+    cone_set_init_pos_timer = cone_set_init_pos_timer + dt
+  end
+  
   getUserInputs() 
   failPlayerOnInputs()
+  
   
   -- Display UI text
   renderUIText(dt)
@@ -214,14 +309,16 @@ end
 local function onRaceTick(raceTickTime, scenarioTimer)
   local playerVeh = be:getPlayerVehicle(0)
   
-  for k,v in pairs(map.objects) do
-    if v.id ~= playerVeh:getID() then
-      local dist_moved = (v.pos - cones_init_pos[k]):length()
-      
-      if dist_moved > 0.1 then  
-        -- Cone hit!!!
-        failRun("You hit a cone!")
-        break
+  if tableSize(cones_init_pos) > 0 then 
+    for k,v in pairs(map.objects) do
+      if v.id ~= playerVeh:getID() then
+        local dist_moved = (v.pos - cones_init_pos[k]):length()
+        
+        if dist_moved > 0.1 then  
+          -- Cone hit!!!
+          failRun("You hit a cone!")
+          break
+        end
       end
     end
   end
@@ -247,14 +344,12 @@ local function resetScene()
   resetSpeeds()
   
   next_trigger = 1
+  cone_set_init_pos_timer = -1
   state = "ready"
 end
 
 local function setSpeedAndVerify(i)
   local speed = be:getPlayerVehicle(0):getVelocity():length()
-  
-  print("Trigger:" .. i)
-  print(next_trigger)
   
   if next_trigger == i then
     current_zones_speeds[i] = speed
@@ -267,6 +362,23 @@ local function setSpeedAndVerify(i)
 end
 
 local function successfulRun()
+  local config_data = core_vehicles.getCurrentVehicleDetails().configs
+  local veh_config = config_data.Name
+  local veh_name = nil
+  
+  if config_data.aggregates.Brand then
+    local veh_brand = tableKeys(config_data.aggregates.Brand)[1]
+    veh_name = veh_brand .. " " .. veh_config
+  else
+    veh_name = veh_config
+  end
+  
+  -- Save speed to file
+  addRunToJSONFile({
+      config_name = veh_name,
+      speed = current_zones_speeds[1] 
+  })
+  
   zones_speeds_history[#zones_speeds_history + 1] = current_zones_speeds
   
   helper.flashUiMessage("Successful Run!", 3)
@@ -311,7 +423,9 @@ local function onBeamNGTrigger(data)
   end
 end
 
+M.onExtensionLoaded = onExtensionLoaded
 M.onRaceStart = onRaceStart
+M.onUpdate = onUpdate
 M.onPreRender = onPreRender
 M.onRaceTick = onRaceTick
 M.onBeamNGTrigger = onBeamNGTrigger
