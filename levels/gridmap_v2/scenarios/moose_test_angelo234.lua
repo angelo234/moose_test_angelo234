@@ -8,15 +8,18 @@ local spawn_pos = vec3(344, 219.67, 100.25)
 
 local runs_json_file_dir = "settings/moose_test_angelo234/runs.json"
 
-local zones_speeds_history = {}
-
--- 1 = zone 1 enter, 2 = zone 1 exit
--- 3 = zone 2 enter, 4 = zone 2 exit
--- 5 = zone 3 enter, 6 = zone 3 exit
+-- 1 = zone 1 enter, 2 = zone 1 middle, 3 = zone 1 exit
+-- 4 = zone 2 enter, 5 = zone 2 middle, 6 = zone 2 exit
+-- 7 = zone 3 enter, 8 = zone 3 middle, 9 = zone 3 exit
 local current_zones_speeds = {}
 
+local current_run_max_forward_acc = 0
+local current_run_max_lateral_acc = 0
+
+--local current_run_avg_acc = 0
+
 local cones_init_pos = {}
-local cone_set_init_pos_timer = -1
+local reset_cone_timer = -1
 
 local state = "ready"
 local next_trigger = 1
@@ -29,12 +32,23 @@ M.last_user_inputs = {
   clutch = 0
 }
 
+M.last_sensors_data = {
+  gx2 = 0,
+  gy2 = 0,
+  gz2 = 0,
+}
+
 local update_ui_timer = 0
 local update_ui_delay = 0.25 -- update UI every 0.25 seconds
 
-local window_open = im.BoolPtr(true)
+local window_open = im.BoolPtr(true) -- this just holds window open state
+local show_window = false
 
 local runs_data = {}
+
+local function onScenarioUIReady(state)
+  show_window = true
+end
 
 local function readRunsJSONFile()
   runs_data = readJsonFile(runs_json_file_dir) or {}
@@ -48,7 +62,7 @@ local function addRunToJSONFile(new_run)
   
     -- Place new entry in correct order by speed
     for k,v in ipairs(runs_data) do
-      if new_run.speed > v.speed then
+      if new_run.speeds[1] > v.speeds[1] then
         table.insert(runs_data, k, new_run)
         
         added = true
@@ -84,8 +98,10 @@ function round(num, numDecimalPlaces)
   return math.floor(num * mult + 0.5) / mult
 end
 
-local function resetSpeeds()
+local function resetData()
   current_zones_speeds = {}
+  current_run_max_forward_acc = 0
+  current_run_max_lateral_acc = 0
 end
 
 local function failRun(msg)
@@ -114,41 +130,25 @@ end
 local function setupCones()
   local veh = be:getPlayerVehicle(0)
   
-  local markers = getObjectsByClass("BeamNGPointOfInterest")
-  
-  -- Sort unsorted markers
-  local sorted_markers = {}
-  
-  for k,v in pairs(markers) do
-    if v.name:find("marker") then
-      local str_idx = v.name:gsub('%marker', '')
-      local idx = tonumber(str_idx)
-      
-      if idx then
-        sorted_markers[idx] = v 
-      end
-    end
-  end
-  
   -- Section 1
   -- width (m) = 1.1 * vehicle_width + 0.25
   -- left = pos y axis
   local half_width_1 = 1.1 * veh:getSpawnWorldOOBB():getHalfExtents().x + 0.125
   
-  local section1_markers = {"marker1", "marker2", "marker3"}
+  local section1_triggers = {"zone_trigger1", "zone_trigger2", "zone_trigger3"}
   local section1_cones = {"cone1l", "cone1r", "cone2l", "cone2r", "cone3l", "cone3r"}
   
   local i = 1
   
-  for k, v in pairs(section1_markers) do
-    local marker = scenetree.findObject(v)
-    local marker_pos = marker:getPosition()
+  for k, v in pairs(section1_triggers) do
+    local trigger = scenetree.findObject(v)
+    local trigger_pos = trigger:getPosition()
     
     local cone_l = scenetree.findObject(section1_cones[i])
     local cone_r = scenetree.findObject(section1_cones[i + 1])
     
-    cone_l:setPosition(marker_pos + vec3(0, half_width_1, 0))
-    cone_r:setPosition(marker_pos - vec3(0, half_width_1, 0))
+    cone_l:setPosition(trigger_pos + vec3(0, half_width_1, 0))
+    cone_r:setPosition(trigger_pos - vec3(0, half_width_1, 0))
     
     i = i + 2
   end
@@ -157,26 +157,26 @@ local function setupCones()
   -- width (m) = vehicle_width + 1.0
   local half_width_2 = veh:getSpawnWorldOOBB():getHalfExtents().x + 0.5
   
-  local section2_markers = {"marker4", "marker5", "marker6"}
+  local section2_triggers = {"zone_trigger4", "zone_trigger5", "zone_trigger6"}
   local section2_cones = {"cone4l", "cone4r", "cone5l", "cone5r", "cone6l", "cone6r"}
   
   local cone3l_pos = scenetree.findObject("cone3l"):getPosition() 
-  local marker_y = cone3l_pos.y + 1 + half_width_2
+  local trigger_y = cone3l_pos.y + 1 + half_width_2
 
   i = 1
   
-  for k, v in pairs(section2_markers) do
-    local marker = scenetree.findObject(v)
-    local marker_pos = marker:getPosition()
+  for k, v in pairs(section2_triggers) do
+    local trigger = scenetree.findObject(v)
+    local trigger_pos = trigger:getPosition()
     
-    marker:setPosition(vec3(marker_pos.x, marker_y, marker_pos.z))
-    marker_pos = marker:getPosition()
+    trigger:setPosition(vec3(trigger_pos.x, trigger_y, trigger_pos.z))
+    trigger_pos = trigger:getPosition()
     
     local cone_l = scenetree.findObject(section2_cones[i])
     local cone_r = scenetree.findObject(section2_cones[i + 1])
     
-    cone_l:setPosition(marker_pos + vec3(0, half_width_2, 0))
-    cone_r:setPosition(marker_pos - vec3(0, half_width_2, 0))
+    cone_l:setPosition(trigger_pos + vec3(0, half_width_2, 0))
+    cone_r:setPosition(trigger_pos - vec3(0, half_width_2, 0))
     
     i = i + 2
   end
@@ -185,31 +185,31 @@ local function setupCones()
   -- width (m) = 3
   local half_width_3 = 1.5
   
-  local section3_markers = {"marker7", "marker8", "marker9"}
+  local section3_triggers = {"zone_trigger7", "zone_trigger8", "zone_trigger9"}
   local section3_cones = {"cone7l", "cone7r", "cone8l", "cone8r", "cone9l", "cone9r"}
   
   i = 1
   
-  for k, v in pairs(section3_markers) do
-    local marker = scenetree.findObject(v)
-    local marker_pos = marker:getPosition()
+  for k, v in pairs(section3_triggers) do
+    local trigger = scenetree.findObject(v)
+    local trigger_pos = trigger:getPosition()
     
     local cone_l = scenetree.findObject(section3_cones[i])
     local cone_r = scenetree.findObject(section3_cones[i + 1])
     
-    cone_l:setPosition(marker_pos + vec3(0, half_width_3, 0))
-    cone_r:setPosition(marker_pos - vec3(0, half_width_3, 0))
+    cone_l:setPosition(trigger_pos + vec3(0, half_width_3, 0))
+    cone_r:setPosition(trigger_pos - vec3(0, half_width_3, 0))
     
     i = i + 2
   end
   
-  cone_set_init_pos_timer = 0
+  reset_cone_timer = 0
 end
 
 local function onRaceStart()
   removeOtherObjects()
   setupCones()
-  resetSpeeds()
+  resetData()
   
   next_trigger = 1
   state = "ready"
@@ -221,6 +221,15 @@ local function getUserInputs()
     
   for k, v in pairs(M.last_user_inputs) do    
     playerVehicle:queueLuaCommand("obj:queueGameEngineLua('if not scenario_moose_test_angelo234 then return end scenario_moose_test_angelo234.last_user_inputs." .. k .. " = ' .. input.state." .. k .. ".val)")
+  end
+end
+
+local function getVehicleSensorsData()
+  local playerVehicle = be:getPlayerVehicle(0)
+  if not playerVehicle then return end
+    
+  for k, v in pairs(M.last_sensors_data) do    
+    playerVehicle:queueLuaCommand("obj:queueGameEngineLua('if not scenario_moose_test_angelo234 then return end scenario_moose_test_angelo234.last_sensors_data." .. k .. " = ' .. sensors." .. k .. ")")
   end
 end
 
@@ -236,10 +245,6 @@ local function renderUIText(dt)
   if update_ui_timer >= update_ui_delay then
     local speed = 0
     
-    if zones_speeds_history[#zones_speeds_history] then 
-      speed = zones_speeds_history[#zones_speeds_history][1]
-    end
-    
     guihooks.message("Last Exit Speed: " .. string.format("%.1f", round(speed * 3.6, 1)) .. " km/h", 2 * update_ui_delay, "num_deliveries")
   
     update_ui_timer = 0
@@ -249,40 +254,52 @@ local function renderUIText(dt)
 end
 
 local function renderIMGUI()
+  if not show_window then return end
+  
   local im_char_size = 6.25
   local x_button_size = 15
   
   if im.Begin('Leaderboards', window_open) then
+    --im.PushStyleColor2(im.Col_Text, im.ImVec4(1, 0, 0, 1))
     if im.Button("Remove All Runs") then
       removeAllRunsFromJSONFile()
     end
+    --im.PopStyleColor()
     
     for k,v in ipairs(runs_data) do
-      local str_speed = string.format("%.1f km/h", round(v.speed * 3.6, 1))
+      local str_entrance_speed = string.format("%.1f km/h", round(v.speeds[1] * 3.6, 1))
+      local str_middle_speed = string.format("%.1f km/h", round(v.speeds[5] * 3.6, 1))
+      local str_exit_speed = string.format("%.1f km/h", round(v.speeds[9] * 3.6, 1))
       
       local avail = im.GetContentRegionAvail().x - x_button_size
       
-      local full_text = tostring(k) .. ". " .. str_speed .. ", " .. v.config_name
+      local full_text = tostring(k) .. ". " .. str_entrance_speed .. ", " .. v.config_name
       local text_displayed = string.sub(full_text, 1, math.floor(avail / im_char_size))
       
       im.Text(text_displayed)
-      im.tooltip(full_text)
+      
+      local tooltip_text = 
+        v.config_name .. "\n" ..
+        "Entrance Speed: " .. str_entrance_speed .. "\n" ..
+        "Middle Speed: " .. str_middle_speed .. "\n" ..  
+        "Exit Speed: " .. str_exit_speed .. "\n"   
+      
+      im.tooltip(tooltip_text)
       
       im.SameLine(avail)
+      
+      --im.PushStyleColor2(im.Col_Text, im.ImVec4(1, 0, 0, 1))
       if im.Button("X##" .. tostring(k)) then
         removeRunFromJSONFile(k)
       end
+      --im.PopStyleColor()
     end
   end
   im.End()
 end
 
-local function onUpdate(dt)
-  renderIMGUI()
-end
-
-local function onPreRender(dt, dtSim)
-  if cone_set_init_pos_timer >= 1 then
+local function resetConeTimer(dt)
+  if reset_cone_timer >= 1 then
     -- Store init position of cones for determining if they move later
     for k,v in pairs(map.objects) do
       cones_init_pos[k] = vec3(v.pos)
@@ -291,25 +308,34 @@ local function onPreRender(dt, dtSim)
     -- Track cones for movement
     be:queueAllObjectLua("mapmgr.enableTracking()")
     
-    cone_set_init_pos_timer = -1
+    reset_cone_timer = -1
   end
   
-  if cone_set_init_pos_timer >= 0 then
-    cone_set_init_pos_timer = cone_set_init_pos_timer + dt
+  if reset_cone_timer >= 0 then
+    reset_cone_timer = reset_cone_timer + dt
   end
+end
+
+local function onUpdate(dt)
+  resetConeTimer(dt)
   
   getUserInputs() 
   failPlayerOnInputs()
   
+  getVehicleSensorsData()
+  
+  current_run_max_forward_acc = math.max(M.last_sensors_data.gy2, current_run_max_forward_acc)
+  current_run_max_lateral_acc = math.max(math.abs(M.last_sensors_data.gx2), current_run_max_lateral_acc)
   
   -- Display UI text
-  renderUIText(dt)
+  renderUIText(dt) 
+  renderIMGUI()
 end
 
 local function onRaceTick(raceTickTime, scenarioTimer)
   local playerVeh = be:getPlayerVehicle(0)
   
-  if tableSize(cones_init_pos) > 0 then 
+  if tableSize(cones_init_pos) > 0 and reset_cone_timer == -1 then 
     for k,v in pairs(map.objects) do
       if v.id ~= playerVeh:getID() then
         local dist_moved = (v.pos - cones_init_pos[k]):length()
@@ -327,6 +353,8 @@ end
 local function resetScene()
   local playerVeh = be:getPlayerVehicle(0)
   
+  reset_cone_timer = 0
+  
   -- Move all cones back to original positions
   local allVehicles = scenetree.findClassObjects('BeamNGVehicle')
   for k, vehicleName in ipairs(allVehicles) do
@@ -341,10 +369,9 @@ local function resetScene()
   -- but with current velocity
   playerVeh:setPosition(spawn_pos)
   
-  resetSpeeds()
+  resetData()
   
   next_trigger = 1
-  cone_set_init_pos_timer = -1
   state = "ready"
 end
 
@@ -376,10 +403,10 @@ local function successfulRun()
   -- Save speed to file
   addRunToJSONFile({
       config_name = veh_name,
-      speed = current_zones_speeds[1] 
+      speeds = current_zones_speeds,
+      max_fwd_acc = current_run_max_forward_acc,
+      max_lat_acc = current_run_max_lateral_acc
   })
-  
-  zones_speeds_history[#zones_speeds_history + 1] = current_zones_speeds
   
   helper.flashUiMessage("Successful Run!", 3)
   
@@ -392,41 +419,43 @@ local function onBeamNGTrigger(data)
   -- Only care about player on triggers
   if not veh or data.subjectName ~= "thePlayer" then return end
   
-  if data.triggerName == "zone_1_enter_trigger" then
-    state = "running"
-    setSpeedAndVerify(1)
-
-  elseif data.triggerName == "zone_1_exit_trigger" then
-    setSpeedAndVerify(2)
-  
-  elseif data.triggerName == "zone_2_enter_trigger" then
-    setSpeedAndVerify(3)
-  
-  elseif data.triggerName == "zone_2_exit_trigger" then
-    setSpeedAndVerify(4)
-  
-  elseif data.triggerName == "zone_3_enter_trigger" then
-    setSpeedAndVerify(5)
-  
-  elseif data.triggerName == "zone_3_exit_trigger" then
+  if data.triggerName == "zone_trigger1" then
     if data.event == "enter" then
-      setSpeedAndVerify(6)
+      state = "running"
+    
+      setSpeedAndVerify(1)
+    end
+  
+  elseif data.triggerName == "zone_trigger9" then
+    if data.event == "enter" then
+      setSpeedAndVerify(9)
       
     elseif data.event == "exit" then
       if state == "running" then
         successfulRun()
       end
     end
-  
+    
   elseif data.triggerName == "finish_trigger" then
-    resetScene()
+    if data.event == "enter" then
+      resetScene()
+    end
+  
+  elseif data.triggerName:find("zone_trigger") then
+    if data.event == "enter" then
+      local str_id = data.triggerName:match("%d+")
+      local id = tonumber(str_id)
+      
+      setSpeedAndVerify(id)
+    end
   end
+  
 end
 
+M.onScenarioUIReady = onScenarioUIReady
 M.onExtensionLoaded = onExtensionLoaded
 M.onRaceStart = onRaceStart
 M.onUpdate = onUpdate
-M.onPreRender = onPreRender
 M.onRaceTick = onRaceTick
 M.onBeamNGTrigger = onBeamNGTrigger
 
