@@ -8,22 +8,6 @@ local spawn_pos = vec3(344, 219.67, 100.25)
 
 local runs_json_file_dir = "settings/moose_test_angelo234/runs.json"
 
--- 1 = zone 1 enter, 2 = zone 1 middle, 3 = zone 1 exit
--- 4 = zone 2 enter, 5 = zone 2 middle, 6 = zone 2 exit
--- 7 = zone 3 enter, 8 = zone 3 middle, 9 = zone 3 exit
-local current_zones_speeds = {}
-
-local current_run_max_forward_acc = 0
-local current_run_max_lateral_acc = 0
-
---local current_run_avg_acc = 0
-
-local cones_init_pos = {}
-local reset_cone_timer = -1
-
-local state = "ready"
-local next_trigger = 1
-
 M.last_user_inputs = {
   steering = 0,
   throttle = 0,
@@ -35,8 +19,30 @@ M.last_user_inputs = {
 M.last_sensors_data = {
   gx2 = 0,
   gy2 = 0,
-  gz2 = 0,
+  gz2 = 0
 }
+
+-- 1 = zone 1 enter, 2 = zone 1 middle, 3 = zone 1 exit
+-- 4 = zone 2 enter, 5 = zone 2 middle, 6 = zone 2 exit
+-- 7 = zone 3 enter, 8 = zone 3 middle, 9 = zone 3 exit
+local zones_speeds = {}
+
+local acc_data = 
+{
+  max_forward_acc = 0,
+  max_lateral_acc = 0,
+  sum_forward_acc = 0,
+  sum_lateral_acc = 0,
+  num_samples = 0,
+  avg_forward_acc,
+  avg_lateral_acc
+}
+
+local cones_init_pos = {}
+local reset_cone_timer = -1
+
+local state = "ready"
+local next_trigger = 1
 
 local update_ui_timer = 0
 local update_ui_delay = 0.25 -- update UI every 0.25 seconds
@@ -99,9 +105,16 @@ function round(num, numDecimalPlaces)
 end
 
 local function resetData()
-  current_zones_speeds = {}
-  current_run_max_forward_acc = 0
-  current_run_max_lateral_acc = 0
+  zones_speeds = {}
+  acc_data = {
+    max_forward_acc = 0,
+    max_lateral_acc = 0,
+    sum_forward_acc = 0,
+    sum_lateral_acc = 0,
+    num_samples = 0,
+    avg_forward_acc,
+    avg_lateral_acc
+  }
 end
 
 local function failRun(msg)
@@ -231,6 +244,17 @@ local function getVehicleSensorsData()
   for k, v in pairs(M.last_sensors_data) do    
     playerVehicle:queueLuaCommand("obj:queueGameEngineLua('if not scenario_moose_test_angelo234 then return end scenario_moose_test_angelo234.last_sensors_data." .. k .. " = ' .. sensors." .. k .. ")")
   end
+  
+  acc_data.max_forward_acc = math.max(M.last_sensors_data.gy2, acc_data.max_forward_acc)
+  acc_data.max_lateral_acc = math.max(math.abs(M.last_sensors_data.gx2), acc_data.max_lateral_acc)
+  
+  -- 
+  acc_data.sum_forward_acc = acc_data.sum_forward_acc + M.last_sensors_data.gy2
+  acc_data.sum_lateral_acc = acc_data.sum_lateral_acc + math.abs(M.last_sensors_data.gx2)
+  acc_data.num_samples = acc_data.num_samples + 1
+  
+  acc_data.avg_forward_acc = acc_data.sum_forward_acc / acc_data.num_samples
+  acc_data.avg_lateral_acc = acc_data.sum_lateral_acc / acc_data.num_samples
 end
 
 local function failPlayerOnInputs()
@@ -267,22 +291,28 @@ local function renderIMGUI()
     --im.PopStyleColor()
     
     for k,v in ipairs(runs_data) do
-      local str_entrance_speed = string.format("%.1f km/h", round(v.speeds[1] * 3.6, 1))
-      local str_middle_speed = string.format("%.1f km/h", round(v.speeds[5] * 3.6, 1))
-      local str_exit_speed = string.format("%.1f km/h", round(v.speeds[9] * 3.6, 1))
+      local str_entrance_speed = string.format("%.1f", round(v.speeds[1] * 3.6, 1))
+      local str_middle_speed = string.format("%.1f", round(v.speeds[5] * 3.6, 1))
+      local str_exit_speed = string.format("%.1f", round(v.speeds[9] * 3.6, 1))
+      
+      local str_max_fwd_acc = string.format("%.2f", round(-v.acc_data.max_forward_acc / 9.80665, 2))
+      local str_max_lat_acc = string.format("%.2f", round(v.acc_data.max_lateral_acc / 9.80665, 2))
+      local str_avg_fwd_acc = string.format("%.2f", round(-v.acc_data.avg_forward_acc / 9.80665, 2))
+      local str_avg_lat_acc = string.format("%.2f", round(v.acc_data.avg_lateral_acc / 9.80665, 2))
       
       local avail = im.GetContentRegionAvail().x - x_button_size
       
-      local full_text = tostring(k) .. ". " .. str_entrance_speed .. ", " .. v.config_name
+      local full_text = tostring(k) .. ". " .. str_entrance_speed .. " km/h, " .. v.config_name
       local text_displayed = string.sub(full_text, 1, math.floor(avail / im_char_size))
       
       im.Text(text_displayed)
       
       local tooltip_text = 
         v.config_name .. "\n" ..
-        "Entrance Speed: " .. str_entrance_speed .. "\n" ..
-        "Middle Speed: " .. str_middle_speed .. "\n" ..  
-        "Exit Speed: " .. str_exit_speed .. "\n"   
+        "Entrance/Middle/Exit Speed: " .. str_entrance_speed .. "/" .. str_middle_speed .. "/" .. str_exit_speed .. " km/h\n" ..
+        "Max Forward/Lateral Acceleration: " .. str_max_fwd_acc .. "/" .. str_max_lat_acc .. " g's\n" ..
+        "Avg Forward/Lateral Acceleration: " .. str_avg_fwd_acc .. "/" .. str_avg_lat_acc .. " g's"
+        
       
       im.tooltip(tooltip_text)
       
@@ -319,13 +349,12 @@ end
 local function onUpdate(dt)
   resetConeTimer(dt)
   
-  getUserInputs() 
-  failPlayerOnInputs()
-  
-  getVehicleSensorsData()
-  
-  current_run_max_forward_acc = math.max(M.last_sensors_data.gy2, current_run_max_forward_acc)
-  current_run_max_lateral_acc = math.max(math.abs(M.last_sensors_data.gx2), current_run_max_lateral_acc)
+  if state == "running" then
+    getUserInputs() 
+    getVehicleSensorsData() 
+    
+    failPlayerOnInputs()
+  end
   
   -- Display UI text
   renderUIText(dt) 
@@ -379,11 +408,11 @@ local function setSpeedAndVerify(i)
   local speed = be:getPlayerVehicle(0):getVelocity():length()
   
   if next_trigger == i then
-    current_zones_speeds[i] = speed
+    zones_speeds[i] = speed
   
     next_trigger = i + 1
   
-  elseif current_zones_speeds[i] == nil then
+  elseif zones_speeds[i] == nil then
     failRun()
   end
 end
@@ -403,9 +432,8 @@ local function successfulRun()
   -- Save speed to file
   addRunToJSONFile({
       config_name = veh_name,
-      speeds = current_zones_speeds,
-      max_fwd_acc = current_run_max_forward_acc,
-      max_lat_acc = current_run_max_lateral_acc
+      speeds = zones_speeds,
+      acc_data = acc_data
   })
   
   helper.flashUiMessage("Successful Run!", 3)
