@@ -220,6 +220,9 @@ local function setupCones()
 end
 
 local function onRaceStart()
+  -- Deactivate when watching replay
+  if core_replay.state.state == "playing" then return end
+  
   removeOtherObjects()
   setupCones()
   resetData()
@@ -283,44 +286,55 @@ local function renderIMGUI()
   local im_char_size = 6.25
   local x_button_size = 15
   
-  if im.Begin('Leaderboards', window_open) then
-    --im.PushStyleColor2(im.Col_Text, im.ImVec4(1, 0, 0, 1))
-    if im.Button("Remove All Runs") then
-      removeAllRunsFromJSONFile()
-    end
-    --im.PopStyleColor()
+  if im.Begin('Leaderboards', window_open, im.WindowFlags_MenuBar) then
+    if im.BeginMenuBar() then
+      if im.BeginMenu("File") then
+        --im.PushStyleColor2(im.Col_Text, im.ImVec4(1, 0, 0, 1))
+        --im.PopStyleColor()
+      
+        if im.MenuItem1("Remove All Runs") then
+          removeAllRunsFromJSONFile()
+        end
+        im.EndMenu()
+      end
+      
+      
+      im.EndMenuBar()
+    end 
     
     for k,v in ipairs(runs_data) do
-      local str_entrance_speed = string.format("%.1f", round(v.speeds[1] * 3.6, 1))
-      local str_middle_speed = string.format("%.1f", round(v.speeds[5] * 3.6, 1))
-      local str_exit_speed = string.format("%.1f", round(v.speeds[9] * 3.6, 1))
-      
-      local str_max_fwd_acc = string.format("%.2f", round(-v.acc_data.max_forward_acc / 9.80665, 2))
-      local str_max_lat_acc = string.format("%.2f", round(v.acc_data.max_lateral_acc / 9.80665, 2))
-      local str_avg_fwd_acc = string.format("%.2f", round(-v.acc_data.avg_forward_acc / 9.80665, 2))
-      local str_avg_lat_acc = string.format("%.2f", round(v.acc_data.avg_lateral_acc / 9.80665, 2))
-      
-      local avail = im.GetContentRegionAvail().x - x_button_size
-      
-      local full_text = tostring(k) .. ". " .. str_entrance_speed .. " km/h, " .. v.config_name
-      local text_displayed = string.sub(full_text, 1, math.floor(avail / im_char_size))
-      
-      im.Text(text_displayed)
-      
-      local tooltip_text = 
-        v.config_name .. "\n" ..
-        "Entrance/Middle/Exit Speed: " .. str_entrance_speed .. "/" .. str_middle_speed .. "/" .. str_exit_speed .. " km/h\n" ..
-        "Max Forward/Lateral Acceleration: " .. str_max_fwd_acc .. "/" .. str_max_lat_acc .. " g's\n" ..
-        "Avg Forward/Lateral Acceleration: " .. str_avg_fwd_acc .. "/" .. str_avg_lat_acc .. " g's"
+      if v.speeds and v.acc_data and v.config_name then
+        local str_entrance_speed = string.format("%.1f", round(v.speeds[1] * 3.6, 1))
+        local str_middle_speed = string.format("%.1f", round(v.speeds[5] * 3.6, 1))
+        local str_exit_speed = string.format("%.1f", round(v.speeds[9] * 3.6, 1))
         
-      
-      im.tooltip(tooltip_text)
-      
-      im.SameLine(avail)
-      
-      --im.PushStyleColor2(im.Col_Text, im.ImVec4(1, 0, 0, 1))
-      if im.Button("X##" .. tostring(k)) then
-        removeRunFromJSONFile(k)
+        local str_max_fwd_acc = string.format("%.2f", round(-v.acc_data.max_forward_acc / 9.80665, 2))
+        local str_max_lat_acc = string.format("%.2f", round(v.acc_data.max_lateral_acc / 9.80665, 2))
+        local str_avg_fwd_acc = string.format("%.2f", round(-v.acc_data.avg_forward_acc / 9.80665, 2))
+        local str_avg_lat_acc = string.format("%.2f", round(v.acc_data.avg_lateral_acc / 9.80665, 2))
+        
+        local avail = im.GetContentRegionAvail().x - x_button_size
+        
+        local full_text = tostring(k) .. ". " .. str_entrance_speed .. " km/h, " .. v.config_name
+        local text_displayed = string.sub(full_text, 1, math.floor(avail / im_char_size))
+        
+        im.Text(text_displayed)
+        
+        local tooltip_text = 
+          v.config_name .. "\n"
+          .. "Entrance/Middle/Exit Speed: " .. str_entrance_speed .. "/" .. str_middle_speed .. "/" .. str_exit_speed .. " km/h\n"
+          .. "Max Forward/Lateral Acceleration: " .. str_max_fwd_acc .. "/" .. str_max_lat_acc .. " g's\n"
+          .. "Avg Forward/Lateral Acceleration: " .. str_avg_fwd_acc .. "/" .. str_avg_lat_acc .. " g's"
+          
+        
+        im.tooltip(tooltip_text)
+        
+        im.SameLine(avail)
+        
+        --im.PushStyleColor2(im.Col_Text, im.ImVec4(1, 0, 0, 1))
+        if im.Button("X##" .. tostring(k)) then
+          removeRunFromJSONFile(k)
+        end
       end
       --im.PopStyleColor()
     end
@@ -347,6 +361,13 @@ local function resetConeTimer(dt)
 end
 
 local function onUpdate(dt)
+  -- Display UI text
+  --renderUIText(dt) 
+  renderIMGUI()
+  
+  -- Deactivate when watching replay
+  if core_replay.state.state == "playing" then return end
+  
   resetConeTimer(dt)
   
   if state == "running" then
@@ -355,13 +376,12 @@ local function onUpdate(dt)
     
     failPlayerOnInputs()
   end
-  
-  -- Display UI text
-  renderUIText(dt) 
-  renderIMGUI()
 end
 
 local function onRaceTick(raceTickTime, scenarioTimer)
+  -- Deactivate when watching replay
+  if core_replay.state.state == "playing" then return end
+  
   local playerVeh = be:getPlayerVehicle(0)
   
   if tableSize(cones_init_pos) > 0 and reset_cone_timer == -1 then 
@@ -442,6 +462,9 @@ local function successfulRun()
 end
 
 local function onBeamNGTrigger(data)
+  -- Deactivate when watching replay
+  if core_replay.state.state == "playing" then return end
+  
   local veh = be:getPlayerVehicle(0)
   
   -- Only care about player on triggers
