@@ -1,8 +1,9 @@
 local M = {}
 
 local im = extensions.ui_imgui
-
 local helper = require('scenario/scenariohelper')
+
+local initial_window_size = im.ImVec2(300, 200)
 
 local spawn_pos = vec3(344, 219.67, 100.25)
 
@@ -300,6 +301,8 @@ local x_button_size = 15
 
 local function renderIMGUI()
   if not show_window then return end
+
+  im.SetNextWindowSize(initial_window_size, im.Cond_FirstUseEver)
 
   if im.Begin('Moose Test Leaderboards', window_open, im.WindowFlags_MenuBar) then
     if im.BeginMenuBar() then
