@@ -234,6 +234,9 @@ local function setupCones()
 end
 
 local function onRaceStart()
+  core_input_actionFilter.setGroup('camera_blacklist', {"toggleCamera", "dropCameraAtPlayer", "dropPlayerAtCamera"})
+  core_input_actionFilter.addAction(0, 'camera_blacklist', false)
+  
   -- Deactivate when watching replay
   if core_replay.state.state == "playing" then return end
 
