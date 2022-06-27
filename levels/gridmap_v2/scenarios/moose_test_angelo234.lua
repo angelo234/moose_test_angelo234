@@ -305,7 +305,7 @@ local function renderIMGUI()
 
   im.SetNextWindowSize(initial_window_size, im.Cond_FirstUseEver)
 
-  if im.Begin('Moose Test Leaderboards', window_open, im.WindowFlags_MenuBar) then
+  if im.Begin('Moose Test Leaderboard', window_open, im.WindowFlags_MenuBar) then
     if im.BeginMenuBar() then
       if im.BeginMenu("File") then
         --im.PushStyleColor2(im.Col_Text, im.ImVec4(1, 0, 0, 1))
