@@ -301,7 +301,7 @@ local x_button_size = 15
 local function renderIMGUI()
   if not show_window then return end
 
-  if im.Begin('Leaderboards', window_open, im.WindowFlags_MenuBar) then
+  if im.Begin('Moose Test Leaderboards', window_open, im.WindowFlags_MenuBar) then
     if im.BeginMenuBar() then
       if im.BeginMenu("File") then
         --im.PushStyleColor2(im.Col_Text, im.ImVec4(1, 0, 0, 1))

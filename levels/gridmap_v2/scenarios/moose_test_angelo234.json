@@ -1,7 +1,7 @@
 [
 {
 	"name": "Moose Test",
-	"description": "Test the handling of cars through the industry standard Moose Test!",
+	"description": "Test the handling of cars through the industry standard ISO 3888-2 Moose Test!",
 	"previews": ["moose_test_angelo234.png"],
 	"type": "race",
 	"date": 1656292594,
