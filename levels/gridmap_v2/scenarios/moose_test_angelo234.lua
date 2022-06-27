@@ -241,8 +241,9 @@ local function onRaceStart()
   setupCones()
   resetData()
 
-  helper.flashUiMessage("Start at 70 kmh / 45 mph to get a feel for the vehicle's handling and then increase/decrease speed as needed. No inputs except steering are allowed through the cones!", 10)
-
+  helper.flashUiMessage("Start at 70 kmh / 45 mph to get a feel for the vehicle's handling and then increase/decrease speed as needed. ", 6)
+  helper.flashUiMessage("No inputs except steering are allowed through the cones! And the yellow box at the end teleports you back to start!", 7)
+  
   next_trigger = 1
   state = "ready"
 end
