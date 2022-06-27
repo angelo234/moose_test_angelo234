@@ -52,6 +52,8 @@ local show_window = false
 
 local runs_data = {}
 
+local last_run_index = -1
+
 local function onScenarioUIReady(state)
   show_window = true
 end
@@ -63,6 +65,7 @@ end
 local function addRunToJSONFile(new_run)
   if tableSize(runs_data) == 0 then
     table.insert(runs_data, new_run)
+    last_run_index = 1
   else
     local added = false
   
@@ -70,6 +73,7 @@ local function addRunToJSONFile(new_run)
     for k,v in ipairs(runs_data) do
       if new_run.speeds[1] > v.speeds[1] then
         table.insert(runs_data, k, new_run)
+        last_run_index = k     
         
         added = true
         break
@@ -78,6 +82,7 @@ local function addRunToJSONFile(new_run)
     
     if not added then
       table.insert(runs_data, new_run)
+      last_run_index = #runs_data
     end
   end
   
@@ -87,11 +92,19 @@ end
 local function removeRunFromJSONFile(id)
   table.remove(runs_data, id)
   jsonWriteFile(runs_json_file_dir, runs_data)
+  
+  if id < last_run_index then
+    last_run_index = last_run_index - 1
+  elseif id == last_run_index then
+    last_run_index = -1
+  end
 end
 
 local function removeAllRunsFromJSONFile()
   runs_data = {}
   jsonWriteFile(runs_json_file_dir, runs_data)
+  
+  last_run_index = -1
 end
 
 local function onExtensionLoaded()
@@ -318,7 +331,13 @@ local function renderIMGUI()
         local full_text = tostring(k) .. ". " .. str_entrance_speed .. " km/h, " .. v.config_name
         local text_displayed = string.sub(full_text, 1, math.floor(avail / im_char_size))
         
-        im.Text(text_displayed)
+        if last_run_index == k then      
+          im.PushFont3("cairo_bold")
+          im.Text(text_displayed)
+          im.PopFont()
+        else
+          im.Text(text_displayed)
+        end
         
         local tooltip_text = 
           v.config_name .. "\n"
@@ -416,7 +435,7 @@ local function resetScene()
   
   -- Set vehicle position back to original position
   -- but with current velocity
-  playerVeh:setPosition(spawn_pos)
+  playerVeh:setPositionNoPhysicsReset(spawn_pos)
   
   resetData()
   
