@@ -1,7 +1,7 @@
 [
 {
 	"name": "Moose Test",
-	"description": "Test the handling of cars through the industry standard ISO 3888-2 Moose Test!",
+	"description": "Test the handling of cars through the industry standard ISO 3888-2 Moose Test! Start by getting the vehicle to around 70 kmh / 45 mph to get a feel for the vehicle's handling and then increase/decrease speed as needed. No inputs except steering are allowed through the cones! And the yellow box at the end teleports you back to start!",
 	"previews": ["moose_test_angelo234.png"],
 	"type": "race",
 	"date": 1656292594,
