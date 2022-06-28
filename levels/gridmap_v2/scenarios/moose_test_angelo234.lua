@@ -394,8 +394,9 @@ local function onUpdate(dt)
 
   resetConeTimer(dt)
 
-  if state == "running" then
-    getUserInputs()
+  getUserInputs()
+
+  if state == "running" then -- user has entered cones
     getVehicleSensorsData()
 
     failPlayerOnInputs()
