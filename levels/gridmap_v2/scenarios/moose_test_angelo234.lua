@@ -60,7 +60,7 @@ local function onScenarioUIReady(state)
 end
 
 local function readRunsJSONFile()
-  runs_data = readJsonFile(runs_json_file_dir) or {}
+  runs_data = jsonReadFile(runs_json_file_dir) or {}
 end
 
 local function addRunToJSONFile(new_run)
@@ -236,14 +236,14 @@ end
 local function onRaceStart()
   core_input_actionFilter.setGroup('camera_blacklist', {"toggleCamera", "dropCameraAtPlayer", "dropPlayerAtCamera"})
   core_input_actionFilter.addAction(0, 'camera_blacklist', false)
-  
+
   -- Deactivate when watching replay
   if core_replay.state.state == "playing" then return end
 
   removeOtherObjects()
   setupCones()
   resetData()
-  
+
   next_trigger = 1
   state = "ready"
 end
@@ -283,18 +283,6 @@ local function failPlayerOnInputs()
       failRun("User input except steering not allowed!")
     end
   end
-end
-
-local function renderUIText(dt)
-  if update_ui_timer >= update_ui_delay then
-    local speed = 0
-
-    guihooks.message("Last Exit Speed: " .. string.format("%.1f", round(speed * 3.6, 1)) .. " km/h", 2 * update_ui_delay, "num_deliveries")
-
-    update_ui_timer = 0
-  end
-
-  update_ui_timer = update_ui_timer + dt
 end
 
 local im_char_size = 6.25
@@ -386,7 +374,6 @@ end
 
 local function onUpdate(dt)
   -- Display UI text
-  --renderUIText(dt)
   renderIMGUI()
 
   -- Deactivate when watching replay
